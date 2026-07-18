@@ -4,63 +4,58 @@
   <span class="description">{{ error }}</span>
 </div>
 {% else %}
-<div class="layout layout--col gap--xlarge col--center">
-  <div class="grid grid--center">
-    <div class="col col--span-5">
+<div class="layout layout--col gap">
+  <div class="grid gap">
+    <div class="col--span-5">
       <div class="item">
         <div class="content content--center">
-          <span class="value value--xxlarge value--tnums">{{ temperature | round: 1 }}°</span>
+          <span class="value value--xxlarge value--tnums" data-fit-value="true">{{ temperature | round: 1 }}°</span>
+          {% if rain_status %}<span class="label">{{ rain_status }}</span>{% endif %}
         </div>
       </div>
     </div>
-    <div class="col col--span-7">
-      <div class="item">
-        <div class="content">
-          <span class="title title--xlarge">{{ area }}</span>
-          {% if rain_status %}<span class="description description--large">{{ rain_status }}</span>{% endif %}
+    <div class="col--span-7">
+      <div class="grid grid--cols-2 gap">
+        {% if humidity != nil %}
+        <div class="item">
+          <div class="content content--center">
+            <span class="value value--medium value--tnums">{{ humidity }}%</span>
+            <span class="label label--small">Humidity</span>
+          </div>
         </div>
+        {% endif %}
+        {% if wind_speed_kmh != nil %}
+        <div class="item">
+          <div class="content content--center">
+            <span class="value value--medium value--tnums">{{ wind_speed_kmh }}</span>
+            <span class="label label--small">km/h{% if wind_direction %} {{ wind_direction }}{% endif %}</span>
+          </div>
+        </div>
+        {% endif %}
+        {% if aqi_pm25 != nil %}
+        <div class="item">
+          <div class="content content--center">
+            <span class="value value--medium value--tnums">{{ aqi_pm25 }}</span>
+            <span class="label label--small">AQI{% if aqi_label %} · {{ aqi_label }}{% endif %}</span>
+          </div>
+        </div>
+        {% endif %}
+        {% if rain_accumulation and rain_accumulation > 0 %}
+        <div class="item">
+          <div class="content content--center">
+            <span class="value value--medium value--tnums">{{ rain_accumulation }}mm</span>
+            <span class="label label--small">Rain today</span>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
-  </div>
-
-  <div class="grid grid--cols-2">
-    {% if humidity != nil %}
-    <div class="item">
-      <div class="content content--center">
-        <span class="value value--large value--tnums">{{ humidity }}%</span>
-        <span class="label">Humidity</span>
-      </div>
-    </div>
-    {% endif %}
-    {% if wind_speed_kmh != nil %}
-    <div class="item">
-      <div class="content content--center">
-        <span class="value value--large value--tnums">{{ wind_speed_kmh }}</span>
-        <span class="label">km/h{% if wind_direction %} {{ wind_direction }}{% endif %}</span>
-      </div>
-    </div>
-    {% endif %}
-    {% if rain_accumulation and rain_accumulation > 0 %}
-    <div class="item">
-      <div class="content content--center">
-        <span class="value value--large value--tnums">{{ rain_accumulation }}mm</span>
-        <span class="label">Rain today</span>
-      </div>
-    </div>
-    {% endif %}
-    {% if aqi_pm25 != nil %}
-    <div class="item">
-      <div class="content content--center">
-        <span class="value value--large value--tnums">{{ aqi_pm25 }}</span>
-        <span class="label">AQI{% if aqi_label %} · {{ aqi_label }}{% endif %}</span>
-      </div>
-    </div>
-    {% endif %}
   </div>
 </div>
 {% endif %}
 
 <div class="title_bar">
-  <span class="title">{{ trmnl.plugin_settings.instance_name }}</span>
-  <span class="instance">{{ updated_at }} IST</span>
+  <img class="image" src="https://trmnl.com/images/plugins/trmnl--render.svg">
+  <span class="title">{{ area | default: trmnl.plugin_settings.instance_name }}</span>
+  <span class="instance">{{ updated_at }} IST{% if fallback_used %} · nearby{% endif %}</span>
 </div>

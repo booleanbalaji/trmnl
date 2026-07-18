@@ -34,6 +34,27 @@ station. These API inputs remain supported for existing callers, but new plugin
 configuration should use City → Station so the selected locality is
 deterministic.
 
+## Screen layout
+
+The screen shows **current conditions only** — no forecast and no invented
+weather icon (Weather Union does not provide enough condition data to infer
+one truthfully). The selected station's area name appears in the title bar;
+coordinates are never shown as the location label.
+
+## Nearby-station fallback
+
+Some stations omit readings (especially AQI). When the selected location is a
+**catalog station** (City → Station / locality ID) and the primary response
+is missing display fields, the API tries up to **three** nearest catalog
+neighbors and fills missing values from the **first** station that can help.
+Primary values are never overwritten. The visible `area` stays the selected
+station's name; the payload sets `fallback_used` / `fallback_station`, and
+the screen marks borrowed context with a compact `nearby` indicator.
+
+Fallback does **not** run for free-text or raw-coordinate locations, and it
+does **not** run when the primary Weather Union request itself fails — those
+still surface as on-screen errors.
+
 ## Notes
 
 - **Nullable everything:** stations report subsets (rain-only stations

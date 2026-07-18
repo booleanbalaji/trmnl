@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { findStation } from './weather-stations.js';
+import { findStation, nearestStations } from './weather-stations.js';
 
 // Flat, display-ready shape: all derivation (compass text, rain/AQI labels,
 // unit conversion) happens here because Liquid is a weak place for logic.
-interface WeatherPayload {
+export interface WeatherPayload {
   area: string | null;
   temperature: number | null;
   humidity: number | null;
@@ -17,6 +17,33 @@ interface WeatherPayload {
   aqi_label: string | null;
   updated_at: string;
   error: string | null;
+  fallback_used: boolean;
+  fallback_station: string | null;
+}
+
+export const DISPLAY_FIELDS = [
+  'temperature', 'humidity', 'wind_speed_kmh', 'wind_direction',
+  'rain_intensity', 'rain_accumulation', 'rain_status',
+  'aqi_pm25', 'aqi_pm10', 'aqi_label',
+] as const;
+
+export function hasMissingDisplayFields(data: WeatherPayload): boolean {
+  return DISPLAY_FIELDS.some((field) => data[field] === null);
+}
+
+export function mergeMissingFields(
+  primary: WeatherPayload,
+  fallback: WeatherPayload,
+): { payload: WeatherPayload; filled: boolean } {
+  let filled = false;
+  const merged = { ...primary };
+  for (const field of DISPLAY_FIELDS) {
+    if (merged[field] === null && fallback[field] !== null) {
+      (merged as any)[field] = fallback[field];
+      filled = true;
+    }
+  }
+  return { payload: merged, filled };
 }
 
 const WU_URL = 'https://www.weatherunion.com/gw/weather/external/v0/get_weather_data';
@@ -99,13 +126,45 @@ export async function resolveLocation(location: string): Promise<Coords | null> 
   return geocode(location);
 }
 
-function payload(partial: Partial<WeatherPayload>): WeatherPayload {
+export function payload(partial: Partial<WeatherPayload>): WeatherPayload {
   return {
     area: null, temperature: null, humidity: null, wind_speed_kmh: null,
     wind_direction: null, rain_intensity: null, rain_accumulation: null,
     rain_status: null, aqi_pm25: null, aqi_pm10: null, aqi_label: null,
-    updated_at: istTime(), error: null, ...partial,
+    updated_at: istTime(), error: null, fallback_used: false,
+    fallback_station: null, ...partial,
   };
+}
+
+export async function fetchWeatherUnion(
+  lat: number,
+  lon: number,
+  apiKey: string,
+): Promise<WeatherPayload | null> {
+  const resp = await fetch(
+    `${WU_URL}?latitude=${lat}&longitude=${lon}`,
+    { headers: { 'x-zomato-api-key': apiKey }, signal: AbortSignal.timeout(4000) },
+  );
+  if (!resp.ok) return null;
+
+  const body: any = await resp.json();
+  const data = body?.locality_weather_data;
+  if (body?.status !== '200' || !data) return null;
+
+  const windMs = num(data.wind_speed);
+  const pm25 = num(data.aqi_pm_2_point_5);
+  return payload({
+    temperature: num(data.temperature),
+    humidity: num(data.humidity) === null ? null : Math.round(data.humidity),
+    wind_speed_kmh: windMs === null ? null : round1(windMs * 3.6),
+    wind_direction: compass(num(data.wind_direction)),
+    rain_intensity: num(data.rain_intensity),
+    rain_accumulation: num(data.rain_accumulation),
+    rain_status: rainStatus(num(data.rain_intensity)),
+    aqi_pm25: pm25 === null ? null : Math.round(pm25),
+    aqi_pm10: num(data.aqi_pm_10) === null ? null : Math.round(data.aqi_pm_10),
+    aqi_label: aqiLabel(pm25),
+  });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -122,31 +181,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const coords = await resolveLocation(location);
     if (!coords) return res.json(payload({ error: `Location not found: ${location}` }));
 
-    const resp = await fetch(
-      `${WU_URL}?latitude=${coords.lat}&longitude=${coords.lon}`,
-      { headers: { 'x-zomato-api-key': apiKey }, signal: AbortSignal.timeout(4000) },
-    );
-    const body: any = resp.ok ? await resp.json() : null;
-    const data = body?.locality_weather_data;
-    if (!resp.ok || body?.status !== '200' || !data) {
+    const selected = findStation(location);
+    const primaryData = await fetchWeatherUnion(coords.lat, coords.lon, apiKey);
+    if (!primaryData) {
       return res.json(payload({ area: coords.name, error: `No weather station near ${coords.name}` }));
     }
 
-    const windMs = num(data.wind_speed);
-    const pm25 = num(data.aqi_pm_2_point_5);
-    return res.json(payload({
-      area: coords.name,
-      temperature: num(data.temperature),
-      humidity: num(data.humidity) === null ? null : Math.round(data.humidity),
-      wind_speed_kmh: windMs === null ? null : round1(windMs * 3.6),
-      wind_direction: compass(num(data.wind_direction)),
-      rain_intensity: num(data.rain_intensity),
-      rain_accumulation: num(data.rain_accumulation),
-      rain_status: rainStatus(num(data.rain_intensity)),
-      aqi_pm25: pm25 === null ? null : Math.round(pm25),
-      aqi_pm10: num(data.aqi_pm_10) === null ? null : Math.round(data.aqi_pm_10),
-      aqi_label: aqiLabel(pm25),
-    }));
+    let result = payload({ ...primaryData, area: coords.name });
+
+    if (selected && hasMissingDisplayFields(result)) {
+      for (const candidate of nearestStations(selected, 3)) {
+        try {
+          const nearby = await fetchWeatherUnion(
+            candidate.latitude,
+            candidate.longitude,
+            apiKey,
+          );
+          if (!nearby) continue;
+
+          const { payload: merged, filled } = mergeMissingFields(result, {
+            ...nearby,
+            area: coords.name,
+          });
+          if (filled) {
+            result = {
+              ...merged,
+              area: coords.name,
+              fallback_used: true,
+              fallback_station: candidate.name,
+            };
+            break;
+          }
+        } catch {
+          // A failed nearby station should not discard the primary result.
+        }
+      }
+    }
+
+    return res.json(result);
   } catch {
     return res.json(payload({ error: 'Weather fetch failed' }));
   }

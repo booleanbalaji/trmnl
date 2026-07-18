@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   citiesAsOptions,
+  distanceKm,
   findStation,
+  nearestStations,
   stationsAsOptions,
 } from './weather-stations.js';
 import { resolveLocation } from './weather.js';
@@ -69,4 +71,33 @@ test('free text remains supported through geocoding', async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('orders neighbors by distance and excludes the origin', () => {
+  const origin = findStation('ZWL004924');
+  assert.ok(origin);
+  const neighbors = nearestStations(origin, 5);
+  assert.equal(neighbors.some((station) => station.id === origin.id), false);
+  for (let i = 1; i < neighbors.length; i += 1) {
+    const prev = distanceKm(origin, neighbors[i - 1]);
+    const next = distanceKm(origin, neighbors[i]);
+    assert.ok(prev <= next + 1e-9);
+    if (Math.abs(prev - next) < 1e-9) {
+      assert.ok(neighbors[i - 1].id < neighbors[i].id);
+    }
+  }
+});
+
+test('nearestStations defaults to three candidates', () => {
+  const origin = findStation('ZWL004924');
+  assert.ok(origin);
+  assert.equal(nearestStations(origin).length, 3);
+});
+
+test('distanceKm is symmetric and zero for the same point', () => {
+  const a = { latitude: 12.891397, longitude: 77.608176 };
+  const b = { latitude: 12.97, longitude: 77.64 };
+  assert.equal(distanceKm(a, a), 0);
+  assert.ok(Math.abs(distanceKm(a, b) - distanceKm(b, a)) < 1e-9);
+  assert.ok(distanceKm(a, b) > 0);
 });
