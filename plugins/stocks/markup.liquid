@@ -1,0 +1,161 @@
+{% assign count = tickers | size %}
+{% comment %} Price size follows the native stock_price plugin's count branching {% endcomment %}
+{% if count == 1 %}{% assign price_size = 'xxlarge' %}
+{% elsif count == 2 %}{% assign price_size = 'xlarge' %}
+{% elsif count == 3 %}{% assign price_size = 'large' %}
+{% elsif count == 4 %}{% assign price_size = 'medium' %}
+{% elsif count <= 6 %}{% assign price_size = 'small' %}
+{% else %}{% assign price_size = 'xsmall' %}{% endif %}
+
+<div class="view view--full">
+  <div class="layout layout--col gap--space-between">
+
+    {% if count <= 3 %}
+      {% comment %} 1-3 tickers: single stacked column with dividers {% endcomment %}
+      {% for ticker in tickers %}
+        {% if forloop.index > 1 %}<div class="w-full b-h-gray-5"></div>{% endif %}
+        <div class="grid grid--cols-1">
+          <div class="grid grid--cols-2">
+            <div class="item">
+              <div class="content">
+                <span class="value">{{ ticker.symbol }}</span>
+                <span class="label">{{ ticker.name | truncate: 28 }}</span>
+              </div>
+            </div>
+            <div class="item">
+              <div class="content">
+                <span class="value value--small value--tnums">{{ ticker.change }}</span>
+                <span class="label">Daily Change</span>
+              </div>
+            </div>
+          </div>
+          <div class="item">
+            <div class="content">
+              <span class="value value--{{ price_size }} value--tnums">{{ currency_symbol }}{{ ticker.price | number_with_delimiter }}</span>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+
+    {% elsif count == 4 %}
+      {% comment %} 4 tickers: 2x2 grid {% endcomment %}
+      <div class="columns h-full">
+        <div class="column gap--space-between h-full">
+          {% for ticker in tickers limit: 2 %}
+            {% if forloop.index > 1 %}<div class="w-full b-h-gray-5"></div>{% endif %}
+            <div class="grid grid--cols-1">
+              <div class="grid grid--cols-2">
+                <div class="item">
+                  <div class="content">
+                    <span class="value">{{ ticker.symbol }}</span>
+                    <span class="label">{{ ticker.name | truncate: 20 }}</span>
+                  </div>
+                </div>
+                <div class="item">
+                  <div class="content">
+                    <span class="value value--small value--tnums">{{ ticker.change }}</span>
+                    <span class="label">Daily Change</span>
+                  </div>
+                </div>
+              </div>
+              <div class="item">
+                <div class="content">
+                  <span class="value value--{{ price_size }} value--tnums">{{ currency_symbol }}{{ ticker.price | number_with_delimiter }}</span>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="column gap--space-between h-full">
+          {% for ticker in tickers offset: 2 %}
+            {% if forloop.index > 1 %}<div class="w-full b-h-gray-5"></div>{% endif %}
+            <div class="grid grid--cols-1">
+              <div class="grid grid--cols-2">
+                <div class="item">
+                  <div class="content">
+                    <span class="value">{{ ticker.symbol }}</span>
+                    <span class="label">{{ ticker.name | truncate: 20 }}</span>
+                  </div>
+                </div>
+                <div class="item">
+                  <div class="content">
+                    <span class="value value--small value--tnums">{{ ticker.change }}</span>
+                    <span class="label">Daily Change</span>
+                  </div>
+                </div>
+              </div>
+              <div class="item">
+                <div class="content">
+                  <span class="value value--{{ price_size }} value--tnums">{{ currency_symbol }}{{ ticker.price | number_with_delimiter }}</span>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    {% else %}
+      {% comment %} 5-12 tickers: two columns, first half / second half {% endcomment %}
+      {% assign half = count | plus: 1 | divided_by: 2 %}
+      <div class="columns h-full">
+        <div class="column gap--space-between h-full">
+          {% for ticker in tickers limit: half %}
+            {% if forloop.index > 1 %}<div class="w-full b-h-gray-5"></div>{% endif %}
+            <div class="grid grid--cols-1">
+              <div class="grid grid--cols-2">
+                <div class="item">
+                  <div class="content">
+                    <span class="value value--xsmall">{{ ticker.symbol }}</span>
+                    <span class="label">{{ ticker.name | truncate: 18 }}</span>
+                  </div>
+                </div>
+                <div class="item">
+                  <div class="content">
+                    <span class="value value--xsmall value--tnums">{{ ticker.change }}</span>
+                    <span class="label">Daily Change</span>
+                  </div>
+                </div>
+              </div>
+              <div class="item">
+                <div class="content">
+                  <span class="value value--{{ price_size }} value--tnums">{{ currency_symbol }}{{ ticker.price | number_with_delimiter }}</span>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="column gap--space-between h-full">
+          {% for ticker in tickers offset: half %}
+            {% if forloop.index > 1 %}<div class="w-full b-h-gray-5"></div>{% endif %}
+            <div class="grid grid--cols-1">
+              <div class="grid grid--cols-2">
+                <div class="item">
+                  <div class="content">
+                    <span class="value value--xsmall">{{ ticker.symbol }}</span>
+                    <span class="label">{{ ticker.name | truncate: 18 }}</span>
+                  </div>
+                </div>
+                <div class="item">
+                  <div class="content">
+                    <span class="value value--xsmall value--tnums">{{ ticker.change }}</span>
+                    <span class="label">Daily Change</span>
+                  </div>
+                </div>
+              </div>
+              <div class="item">
+                <div class="content">
+                  <span class="value value--{{ price_size }} value--tnums">{{ currency_symbol }}{{ ticker.price | number_with_delimiter }}</span>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+  </div>
+
+  <div class="title_bar">
+    <span class="title">Indian Stocks</span>
+  </div>
+</div>
