@@ -1,0 +1,16 @@
+{
+  "name": "trmnl",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Screens and plugins for a personal TRMNL e-ink display",
+  "scripts": {
+    "dev": "vercel dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@vercel/node": "^5.8.26",
+    "typescript": "^7.0.2",
+    "vercel": "^56.3.1"
+  }
+}
