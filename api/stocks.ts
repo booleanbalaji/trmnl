@@ -59,10 +59,14 @@ async function fetchTicker(symbol: string): Promise<Ticker> {
       signal: AbortSignal.timeout(4000),
     });
     if (resp.status === 429) {
+      console.log(`yahoo 429 for ${symbol} on ${host}`);
       await sleep(500); // brief backoff, then retry on the mirror host
       continue;
     }
-    if (!resp.ok) return invalid(symbol);
+    if (!resp.ok) {
+      console.log(`yahoo ${resp.status} for ${symbol} on ${host}: ${(await resp.text()).slice(0, 200)}`);
+      return invalid(symbol);
+    }
 
     const body: any = await resp.json();
     const meta = body?.chart?.result?.[0]?.meta;
