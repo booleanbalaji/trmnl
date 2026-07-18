@@ -3,3 +3,5 @@ node_modules/
 trmnl.env
 .DS_Store
 *.log
+.vercel
+.env*
