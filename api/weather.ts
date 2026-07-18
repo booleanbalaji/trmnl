@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { findStation } from './weather-stations.js';
 
 // Flat, display-ready shape: all derivation (compass text, rain/AQI labels,
 // unit conversion) happens here because Liquid is a weak place for logic.
@@ -76,6 +77,28 @@ async function geocode(query: string): Promise<Coords | null> {
   return null;
 }
 
+export async function resolveLocation(location: string): Promise<Coords | null> {
+  const station = findStation(location);
+  if (station) {
+    return {
+      lat: station.latitude,
+      lon: station.longitude,
+      name: station.name,
+    };
+  }
+
+  const match = location.match(LATLON_RE);
+  if (match) {
+    return {
+      lat: parseFloat(match[1]),
+      lon: parseFloat(match[2]),
+      name: location,
+    };
+  }
+
+  return geocode(location);
+}
+
 function payload(partial: Partial<WeatherPayload>): WeatherPayload {
   return {
     area: null, temperature: null, humidity: null, wind_speed_kmh: null,
@@ -96,14 +119,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!location) return res.json(payload({ error: 'No location configured' }));
 
   try {
-    let coords: Coords | null;
-    const m = location.match(LATLON_RE);
-    if (m) {
-      coords = { lat: parseFloat(m[1]), lon: parseFloat(m[2]), name: location };
-    } else {
-      coords = await geocode(location);
-      if (!coords) return res.json(payload({ error: `Location not found: ${location}` }));
-    }
+    const coords = await resolveLocation(location);
+    if (!coords) return res.json(payload({ error: `Location not found: ${location}` }));
 
     const resp = await fetch(
       `${WU_URL}?latitude=${coords.lat}&longitude=${coords.lon}`,

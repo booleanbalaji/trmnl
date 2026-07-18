@@ -5,11 +5,13 @@
   "description": "Screens and plugins for a personal TRMNL e-ink display",
   "scripts": {
     "dev": "vercel dev",
+    "test": "node --import tsx --test api/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "@vercel/node": "^5.8.26",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.3",
     "vercel": "^56.3.1"
   }

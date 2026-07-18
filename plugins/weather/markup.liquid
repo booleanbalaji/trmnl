@@ -1,0 +1,66 @@
+{% if error %}
+<div class="layout layout--col gap--large col--center">
+  <span class="title title--small">Weather unavailable</span>
+  <span class="description">{{ error }}</span>
+</div>
+{% else %}
+<div class="layout layout--col gap--xlarge col--center">
+  <div class="grid grid--center">
+    <div class="col col--span-5">
+      <div class="item">
+        <div class="content content--center">
+          <span class="value value--xxlarge value--tnums">{{ temperature | round: 1 }}°</span>
+        </div>
+      </div>
+    </div>
+    <div class="col col--span-7">
+      <div class="item">
+        <div class="content">
+          <span class="title title--xlarge">{{ area }}</span>
+          {% if rain_status %}<span class="description description--large">{{ rain_status }}</span>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid--cols-2">
+    {% if humidity != nil %}
+    <div class="item">
+      <div class="content content--center">
+        <span class="value value--large value--tnums">{{ humidity }}%</span>
+        <span class="label">Humidity</span>
+      </div>
+    </div>
+    {% endif %}
+    {% if wind_speed_kmh != nil %}
+    <div class="item">
+      <div class="content content--center">
+        <span class="value value--large value--tnums">{{ wind_speed_kmh }}</span>
+        <span class="label">km/h{% if wind_direction %} {{ wind_direction }}{% endif %}</span>
+      </div>
+    </div>
+    {% endif %}
+    {% if rain_accumulation and rain_accumulation > 0 %}
+    <div class="item">
+      <div class="content content--center">
+        <span class="value value--large value--tnums">{{ rain_accumulation }}mm</span>
+        <span class="label">Rain today</span>
+      </div>
+    </div>
+    {% endif %}
+    {% if aqi_pm25 != nil %}
+    <div class="item">
+      <div class="content content--center">
+        <span class="value value--large value--tnums">{{ aqi_pm25 }}</span>
+        <span class="label">AQI{% if aqi_label %} · {{ aqi_label }}{% endif %}</span>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="title_bar">
+  <span class="title">{{ trmnl.plugin_settings.instance_name }}</span>
+  <span class="instance">{{ updated_at }} IST</span>
+</div>
