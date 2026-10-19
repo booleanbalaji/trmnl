@@ -4,7 +4,7 @@ Stock prices for Indian exchanges plus NIFTY 50 / SENSEX indices. Modeled 1:1 on
 
 - **Data source:** `api/stocks.ts`, deployed at `https://<vercel-project>.vercel.app/api/stocks`
 - **Strategy:** Polling
-- **Quotes from:** Yahoo Finance chart API (unofficial, no key). INR prices.
+- **Quotes from:** TradingView scanner API (unofficial, no key), one batched request per poll. INR prices. Symbols keep Yahoo-style forms and are mapped to `NSE:`/`BSE:` tickers internally. (Yahoo was dropped in Oct 2026 — it 429s every cookieless request.)
 
 ## Configuring the watchlist
 
@@ -26,7 +26,7 @@ https://<vercel-project>.vercel.app/api/stocks?symbols=RELIANCE.NS,TCS.NS,^NSEI
 | NIFTY 50 | `^NSEI` | |
 | SENSEX | `^BSESN` | |
 
-**Numeric BSE scrip codes (e.g. `500325.BO`) are not supported** — Yahoo serves stale/broken data for them, so the endpoint rejects them up front. Unknown or failed symbols render degraded (`SYMBOL_NOT_SUPPORTED`, ₹0) instead of failing the whole screen — same behavior as the native plugin.
+**Numeric BSE scrip codes (e.g. `500325.BO`) are not supported** — there is no name to map them to, so the endpoint rejects them up front. Unknown or failed symbols render degraded (`SYMBOL_NOT_SUPPORTED`, ₹0) instead of failing the whole screen — same behavior as the native plugin.
 
 ## Notes
 

@@ -28,52 +28,57 @@ const invalid = (symbol: string): Ticker => ({
   change: '',
 });
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const INDICES: Record<string, string> = {
+  '^NSEI': 'NSE:NIFTY',
+  '^BSESN': 'BSE:SENSEX',
+};
 
-function tickerFromMeta(symbol: string, meta: any): Ticker {
-  const price = meta?.regularMarketPrice;
-  const prev = meta?.chartPreviousClose;
-  if (typeof price !== 'number' || typeof prev !== 'number' || prev === 0) {
-    return invalid(symbol);
+// Watchlists keep Yahoo-style symbols (RELIANCE.NS, ^NSEI) so existing
+// polling URLs work; TradingView wants EXCHANGE:NAME. Numeric BSE scrip
+// codes (500325.BO) have no name to map, so they stay unsupported.
+export function toTradingView(symbol: string): string | null {
+  const index = INDICES[symbol.toUpperCase()];
+  if (index) return index;
+  const match = /^([A-Z][A-Z0-9&-]*)\.(NS|BO)$/i.exec(symbol);
+  if (!match) return null;
+  return `${match[2].toUpperCase() === 'NS' ? 'NSE' : 'BSE'}:${match[1].toUpperCase()}`;
+}
+
+// Yahoo's chart API now 429s every request without a session cookie, so
+// quotes come from TradingView's scanner (unofficial, no key) — one batched
+// request for the whole watchlist.
+async function fetchQuotes(tvSymbols: string[]): Promise<Map<string, any[]>> {
+  const quotes = new Map<string, any[]>();
+  if (tvSymbols.length === 0) return quotes;
+
+  const resp = await fetch('https://scanner.tradingview.com/india/scan', {
+    method: 'POST',
+    headers: { 'User-Agent': UA, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      symbols: { tickers: tvSymbols },
+      columns: ['close', 'change', 'description'], // change is % vs prev close
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!resp.ok) {
+    console.log(`tradingview ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+    return quotes;
   }
-  const pct = ((price - prev) / prev) * 100;
+
+  const body: any = await resp.json();
+  for (const row of body?.data ?? []) quotes.set(row.s, row.d);
+  return quotes;
+}
+
+function tickerFromQuote(symbol: string, d: any[] | undefined): Ticker {
+  const [price, pct, description] = d ?? [];
+  if (typeof price !== 'number' || typeof pct !== 'number') return invalid(symbol);
   return {
     symbol,
-    name: meta.longName ?? meta.shortName ?? symbol, // indices often lack longName
+    name: description || symbol,
     price: Math.round(price * 100) / 100,
     change: `${pct.toFixed(2)}%`,
   };
-}
-
-// Yahoo aggressively 429s concurrent bursts, so symbols are fetched
-// sequentially with one query2-mirror retry on rate limit.
-async function fetchTicker(symbol: string): Promise<Ticker> {
-  // Numeric BSE codes (e.g. 500325.BO) return stale/broken data from Yahoo —
-  // only name-form .BO symbols (RELIANCE.BO) are supported.
-  if (/^\d+\.BO$/i.test(symbol)) return invalid(symbol);
-
-  const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-  for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
-    const resp = await fetch(`https://${host}${path}`, {
-      headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(4000),
-    });
-    if (resp.status === 429) {
-      console.log(`yahoo 429 for ${symbol} on ${host}`);
-      await sleep(500); // brief backoff, then retry on the mirror host
-      continue;
-    }
-    if (!resp.ok) {
-      console.log(`yahoo ${resp.status} for ${symbol} on ${host}: ${(await resp.text()).slice(0, 200)}`);
-      return invalid(symbol);
-    }
-
-    const body: any = await resp.json();
-    const meta = body?.chart?.result?.[0]?.meta;
-    if (body?.chart?.error || !meta) return invalid(symbol);
-    return tickerFromMeta(symbol, meta);
-  }
-  return invalid(symbol);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -83,19 +88,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .filter(Boolean)
     .slice(0, MAX_TICKERS);
 
-  // Sequential to avoid Yahoo's burst rate limiting; deadline keeps the
-  // worst case (retries/timeouts on every symbol) inside Vercel's 10s budget.
-  const deadline = Date.now() + 8000;
-  const tickers: Ticker[] = [];
-  for (const symbol of symbols) {
-    if (Date.now() > deadline) {
-      tickers.push(invalid(symbol));
-      continue;
-    }
-    tickers.push(await fetchTicker(symbol).catch(() => invalid(symbol)));
-  }
+  const tvSymbols = symbols.map(toTradingView);
+  const quotes = await fetchQuotes(
+    [...new Set(tvSymbols.filter((s): s is string => s !== null))],
+  ).catch((err) => {
+    console.log(`tradingview fetch failed: ${err}`);
+    return new Map<string, any[]>();
+  });
+  const tickers = symbols.map((symbol, i) => {
+    const tv = tvSymbols[i];
+    return tv ? tickerFromQuote(symbol, quotes.get(tv)) : invalid(symbol);
+  });
 
-  // Shield Yahoo from aggressive re-polls via Vercel's CDN cache
+  // Shield the upstream from aggressive re-polls via Vercel's CDN cache
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
   const payload: StocksResponse = {
     tickers,
